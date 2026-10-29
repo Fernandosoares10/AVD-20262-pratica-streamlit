@@ -1,20 +1,22 @@
-# Configuração do Streamlit. Descomente e ajuste conforme o projeto avançar.
-# O tema pode ser trocado pelo menu ⋮ → Settings → Choose app theme.
+# Identidade visual do app (Spotify Tracks).
+# Mesma paleta da EDA da Aula 11: roxo para destaque (Popular) e rosa-claro para referência (Nicho).
+# O tema claro/escuro pode ser trocado pelo menu ⋮ → Settings → Choose app theme.
 
 [theme]
 paddingTop = "0.0rem"     # espaço abaixo da barra do topo (valor entre aspas)
-# font = "sans serif"     # "sans serif", "serif" ou "monospace"
+font = "sans serif"
+baseRadius = "medium"
 
 [theme.light]
-primaryColor = "#c1121f"            # cor de destaque (widgets, links): mesmo vermelho dos histogramas
-backgroundColor = "#ffffff"         # fundo da página
-secondaryBackgroundColor = "#f0f2f6"  # fundo da sidebar e de widgets
-textColor = "#31333f"               # cor do texto
-borderColor = "#d5dae5"
+primaryColor = "#6a4c93"              # destaque (widgets, links, aba ativa): roxo das faixas populares
+backgroundColor = "#fdf9f8"           # fundo da página: branco levemente rosado
+secondaryBackgroundColor = "#f4e9e6"  # fundo da sidebar e de widgets: rosa-claro do Nicho, mais suave
+textColor = "#2d223a"                 # texto: roxo-escuro da EDA, no lugar do preto puro
+borderColor = "#e3d3cf"
 
 [theme.dark]
-primaryColor = "#c1121f"
-backgroundColor = "#0e1117"
-secondaryBackgroundColor = "#262730"
-textColor = "#fafafa"
-borderColor = "#41444e"
+primaryColor = "#a98bd1"              # roxo mais claro, para ter contraste no fundo escuro
+backgroundColor = "#16121c"
+secondaryBackgroundColor = "#241d2e"
+textColor = "#f2eef5"
+borderColor = "#3b3147"
