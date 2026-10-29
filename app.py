@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 
 from src.data_loader import load_data
@@ -32,12 +33,41 @@ CLASSE = "faixa_pop"
 # Sidebar: filtros (variáveis + intervalo)
 with st.sidebar:
     st.header("Filtros")
-    # TODO: seletor das variáveis quantitativas (st.multiselect)
-    # TODO: toggle "Distinguir Popular x Nicho" (st.toggle)
-    # TODO: um slider de intervalo para cada variável selecionada (st.slider)
 
-# TODO: filtrar o df pelos intervalos escolhidos
+    variaveis = st.multiselect(
+        "Variáveis quantitativas",
+        options=VARS_QUANT,
+        default=["danceability", "energy", "loudness", "valence"],
+        help="Escolha as variáveis que entram na correlação e na distribuição.",
+    )
+
+    separar_por_classe = st.toggle(
+        "Distinguir Popular x Nicho",
+        value=False,
+        help="Separa as faixas em Popular (popularity ≥ 50) e Nicho, como na EDA.",
+    )
+
+    # Um slider de intervalo para cada variável selecionada
+    intervalos = {}
+    for var in variaveis:
+        if pd.api.types.is_integer_dtype(df[var]):
+            minimo, maximo, passo = int(df[var].min()), int(df[var].max()), 1
+        else:
+            minimo, maximo = float(df[var].min()), float(df[var].max())
+            passo = round((maximo - minimo) / 100, 3) or 0.001
+        intervalos[var] = st.slider(
+            f"Intervalo de {var}",
+            min_value=minimo,
+            max_value=maximo,
+            value=(minimo, maximo),
+            step=passo,
+            key=f"intervalo_{var}",
+        )
+
+# Mantém só as faixas dentro de todos os intervalos escolhidos
 df_filtrado = df
+for var, (inicio, fim) in intervalos.items():
+    df_filtrado = df_filtrado[df_filtrado[var].between(inicio, fim)]
 
 st.caption(f"{len(df_filtrado):,} de {len(df):,} faixas.".replace(",", "."))
 
