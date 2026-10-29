@@ -45,3 +45,9 @@ Valores de referência citados abaixo: base inteira, sem filtros, ignorando popu
 - **Público-alvo:** os mesmos usuários das métricas 1 e 2, como alerta de qualidade do dado.
 - **Qual decisão pode ser apoiada por essa métrica?** Quanto confiar nas métricas de popularidade de um gênero antes de decidir com base nelas. Se a porcentagem for alta, a recomendação é buscar outra fonte antes de descartar o gênero.
 - **O que comunica ao público-alvo:** "X% das faixas deste gênero vieram sem popularidade; quanto maior esse número, menos confiáveis são as métricas 1 e 2". A diferença aparece em vermelho quando sobe, porque subir é ruim.
+
+## Visuais do Dashboard 2 (além das métricas)
+
+1. **Popularidade mediana por gênero (barras horizontais):** compara os gêneros entre si. Barras porque comprimento é a forma mais precisa de comparar valores entre categorias sem ordem natural. O eixo vai de 0 a 100 (escala completa da `popularity`), para não exagerar diferenças. Clicar numa barra filtra as métricas e os outros dois visuais.
+2. **Popularidade x dados suspeitos, por gênero (dispersão):** cada ponto é um gênero; x é a métrica 5 (% com popularidade 0) e y é a métrica 1 (popularidade mediana). Mostra de uma vez o principal achado da EDA: gêneros mais à direita têm muitos dados faltantes, e por isso a posição deles no visual 1 merece cautela. O gênero clicado aparece destacado.
+3. **Distribuição da popularidade (histograma):** mostra como as faixas selecionadas se espalham de 0 a 100, em faixas de 5 pontos. As cores separam Nicho (< 50) e Popular (≥ 50), então a área roxa é a métrica 2 vista como forma. Complementa a mediana: dois gêneros com a mesma mediana podem ter distribuições bem diferentes.

@@ -37,6 +37,8 @@ CLASSE = "faixa_pop"
 COR_NICHO = "#e9d4d0"
 COR_POPULAR = "#6a4c93"
 CORES_CLASSE = alt.Scale(domain=["Nicho", "Popular"], range=[COR_NICHO, COR_POPULAR])
+# Destaque do gênero clicado na dispersão: laranja contrasta com o roxo nos temas claro e escuro
+COR_CLICADO = "#f28e2b"
 
 
 @st.cache_data
@@ -102,6 +104,42 @@ def calcular_por_genero(dados, ignorar_zeros):
         )
         .reset_index()
     )
+
+
+@st.cache_data
+def calcular_dispersao(dados, ignorar_zeros):
+    """Por gênero: % de popularidade suspeita (todas as faixas) x popularidade mediana.
+
+    O merge à esquerda mantém gêneros em que todas as faixas têm popularidade 0
+    (eles somem do cálculo da mediana quando os zeros são ignorados).
+    """
+    suspeita = (
+        dados.groupby("track_genre")
+        .agg(pct_suspeita=("pop_suspeita", lambda s: s.mean() * 100), faixas=("popularity", "size"))
+        .reset_index()
+    )
+    mediana = sem_zeros(dados, ignorar_zeros).groupby("track_genre")["popularity"].median().rename("mediana")
+    return suspeita.merge(mediana.reset_index(), on="track_genre", how="left")
+
+
+@st.cache_data
+def calcular_hist_popularidade(dados, ignorar_zeros, largura=5):
+    """Contagem de faixas por faixa de popularidade (0-4, 5-9, ..., 95-100), já com a classe.
+
+    As faixas de largura 5 começam em 0, então o corte de 50 (Popular x Nicho) cai
+    exatamente na borda de uma barra.
+    """
+    pop = sem_zeros(dados, ignorar_zeros)["popularity"]
+    inicio = (np.minimum(pop // largura, 100 // largura - 1) * largura).astype(int)
+    contagem = inicio.value_counts().rename_axis("inicio").rename("faixas").reset_index()
+    contagem["fim"] = contagem["inicio"] + largura
+    contagem[CLASSE] = np.where(contagem["inicio"] >= 50, "Popular", "Nicho")
+    return contagem.sort_values("inicio")
+
+
+def formatar_numero(valor, formato, sufixo=""):
+    """Formata um KPI; mostra "–" quando não há faixas para calcular (NaN)."""
+    return "–" if pd.isna(valor) else f"{valor:{formato}}{sufixo}"
 
 
 def formatar_minutos(minutos):
@@ -288,7 +326,10 @@ with aba_d2:
         area_kpis = st.container()
 
         st.subheader("Popularidade mediana por gênero")
-        st.caption("Clique numa barra para ver os KPIs só daquele gênero (shift + clique para vários).")
+        st.caption(
+            "Clique numa barra para ver os KPIs e os dois gráficos abaixo só daquele gênero "
+            "(shift + clique para vários; clique fora das barras para limpar)."
+        )
 
         por_genero = calcular_por_genero(base, ignorar_zeros)
         por_genero = (
@@ -302,11 +343,13 @@ with aba_d2:
             alt.Chart(por_genero)
             .mark_bar(color=COR_POPULAR)
             .encode(
-                x=alt.X("mediana:Q", title="Popularidade mediana (0 a 100)"),
+                x=alt.X("mediana:Q", title="Popularidade mediana (0 a 100)",
+                          scale=alt.Scale(domain=[0, 100]), axis=alt.Axis(tickCount=10)),
                 y=alt.Y(
                     "track_genre:N",
                     title=None,
                     sort=alt.EncodingSortField("mediana", order="descending" if ordem == "Mais populares" else "ascending"),
+                    axis=alt.Axis(labelOverlap=False, labelLimit=160),
                 ),
                 opacity=alt.condition(clique, alt.value(1), alt.value(0.3)),
                 tooltip=[
@@ -317,9 +360,12 @@ with aba_d2:
                 ],
             )
             .add_params(clique)
-            .properties(height=max(260, 24 * len(por_genero)))
         )
-        evento = st.altair_chart(barras, key="barras_genero", on_select="rerun", width="stretch")
+        # Altura explícita: ~26 px por gênero, para nenhum nome ficar escondido
+        evento = st.altair_chart(
+            barras, key="barras_genero", on_select="rerun", width="stretch",
+            height=max(260, 26 * len(por_genero) + 60),
+        )
 
         clicados = [item["track_genre"] for item in evento.selection.get("clique", [])]
         selecionado = base[base["track_genre"].isin(clicados)] if clicados else base
@@ -343,9 +389,10 @@ with aba_d2:
                 return f"{atual[chave] - ref[chave]:+.1f}{sufixo}"
 
             k1, k2, k3, k4, k5 = st.columns(5)
-            k1.metric("Popularidade mediana", f"{atual['pop_mediana']:.0f}", delta("pop_mediana"), border=True,
-                      help="Mediana de popularity (0 a 100). Robusta à assimetria vista na EDA.")
-            k2.metric("Faixas populares", f"{atual['pct_popular']:.1f}%", delta("pct_popular", " p.p."), border=True,
+            k1.metric("Popularidade mediana", formatar_numero(atual["pop_mediana"], ".0f"), delta("pop_mediana"),
+                      border=True, help="Mediana de popularity (0 a 100). Robusta à assimetria vista na EDA.")
+            k2.metric("Faixas populares", formatar_numero(atual["pct_popular"], ".1f", "%"),
+                      delta("pct_popular", " p.p."), border=True,
                       help="% de faixas com popularity ≥ 50 (classe Popular da EDA).")
             delta_dur = None if delta("dur_mediana") is None else f"{(atual['dur_mediana'] - ref['dur_mediana']) * 60:+.0f} s"
             k3.metric("Duração mediana", formatar_minutos(atual["dur_mediana"]), delta_dur,
@@ -358,3 +405,66 @@ with aba_d2:
                       help="% de faixas com popularity = 0 (falha de coleta). Quanto maior, menos confiáveis "
                       "os outros KPIs de popularidade.")
             st.caption(f"{len(selecionado):,} faixas nos KPIs.".replace(",", "."))
+
+        # Visuais 2 e 3: lado a lado, abaixo das barras. Os dois reagem ao clique nas barras.
+        col_disp, col_hist = st.columns(2)
+
+        with col_disp:
+            st.subheader("Popularidade x dados suspeitos, por gênero")
+            st.caption(
+                "Cada ponto é um gênero. Mais à direita = mais faixas com popularidade 0 (falha de coleta, "
+                "achado da EDA). Gênero baixo e à direita pode parecer impopular só porque o dado está incompleto. "
+                "O gênero clicado nas barras aparece em laranja."
+            )
+            dispersao_genero = calcular_dispersao(base, ignorar_zeros)
+            dispersao_genero["destaque"] = (
+                dispersao_genero["track_genre"].isin(clicados) if clicados else False
+            )
+            pontos = (
+                alt.Chart(dispersao_genero)
+                .mark_circle(size=70)
+                .encode(
+                    x=alt.X("pct_suspeita:Q", title="% de faixas com popularidade 0"),
+                    y=alt.Y("mediana:Q", title="Popularidade mediana", scale=alt.Scale(domain=[0, 100])),
+                    color=alt.condition("datum.destaque", alt.value(COR_CLICADO), alt.value("#b9a7cf")),
+                    size=alt.condition("datum.destaque", alt.value(160), alt.value(70)),
+                    tooltip=[
+                        alt.Tooltip("track_genre:N", title="Gênero"),
+                        alt.Tooltip("pct_suspeita:Q", title="% popularidade 0", format=".1f"),
+                        alt.Tooltip("mediana:Q", title="Popularidade mediana", format=".0f"),
+                        alt.Tooltip("faixas:Q", title="Faixas", format=","),
+                    ],
+                )
+                .properties(height=320)
+            )
+            st.altair_chart(pontos, width="stretch")
+
+        with col_hist:
+            st.subheader("Distribuição da popularidade")
+            st.caption(
+                "Faixas nos KPIs (gênero clicado ou todos), agrupadas de 5 em 5 pontos. "
+                "Roxo = Popular (≥ 50), rosa = Nicho."
+            )
+            hist_pop = calcular_hist_popularidade(selecionado, ignorar_zeros)
+            if hist_pop.empty:
+                st.info("Todas as faixas selecionadas têm popularidade 0. Desligue \"Ignorar popularidade = 0\" para vê-las.")
+            else:
+                barras_pop = (
+                    alt.Chart(hist_pop)
+                    .mark_bar()
+                    .encode(
+                        x=alt.X("inicio:Q", bin="binned", title="Popularidade (0 a 100)",
+                                scale=alt.Scale(domain=[0, 100])),
+                        x2="fim:Q",
+                        y=alt.Y("faixas:Q", title="Faixas"),
+                        color=alt.Color(f"{CLASSE}:N", title="Classe", scale=CORES_CLASSE,
+                                        legend=alt.Legend(orient="top")),
+                        tooltip=[
+                            alt.Tooltip("inicio:Q", title="de"),
+                            alt.Tooltip("fim:Q", title="até"),
+                            alt.Tooltip("faixas:Q", title="Faixas", format=","),
+                        ],
+                    )
+                    .properties(height=320)
+                )
+                st.altair_chart(barras_pop, width="stretch")
