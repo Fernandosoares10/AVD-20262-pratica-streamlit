@@ -116,8 +116,31 @@ col_correlacao, col_distribuicao = st.columns([1, 1.5])
 with col_correlacao:
     st.subheader("Correlação (Spearman)")
 
-    if len(variaveis) >= 2:
+    if len(variaveis) == 0:
+        st.warning("Selecione pelo menos 2 variáveis na barra lateral para calcular a correlação.")
+    elif len(variaveis) == 1:
+        st.info(
+            f"Só **{variaveis[0]}** está selecionada. A correlação compara pares de variáveis: "
+            "selecione mais uma para ver o heatmap."
+        )
+    elif df_filtrado.empty:
+        st.warning("Nenhuma faixa dentro dos intervalos escolhidos. Amplie os intervalos na barra lateral.")
+    elif len(df_filtrado) < 30:
+        st.warning(
+            f"Só {len(df_filtrado)} faixas dentro dos intervalos escolhidos: poucas para uma "
+            "correlação confiável. Amplie os intervalos na barra lateral."
+        )
+    else:
         corr = calcular_correlacao(df_filtrado, variaveis)
+
+        # Variável constante dentro do filtro (ex.: intervalo de um único valor) não tem correlação
+        sem_valor = corr[corr["correlacao"].isna()]
+        if not sem_valor.empty:
+            constantes = sorted(set(sem_valor["var_x"]) | set(sem_valor["var_y"]))
+            st.caption(
+                "Células vazias: não há correlação quando a variável não varia dentro do filtro "
+                f"(verifique: {', '.join(constantes)})."
+            )
 
         base = alt.Chart(corr).encode(
             x=alt.X("var_x:N", title=None, sort=variaveis[:-1], axis=alt.Axis(labelAngle=-45)),
@@ -143,8 +166,13 @@ with col_correlacao:
 with col_distribuicao:
     st.subheader("Distribuição")
 
+    if len(variaveis) == 0:
+        st.warning("Selecione pelo menos 1 variável na barra lateral para ver a distribuição.")
+    elif df_filtrado.empty:
+        st.warning("Nenhuma faixa dentro dos intervalos escolhidos. Amplie os intervalos na barra lateral.")
+
     # Um histograma por variável selecionada, em grade de 2 colunas (cada um com a sua escala)
-    for inicio in range(0, len(variaveis), 2):
+    for inicio in range(0, len(variaveis) if not df_filtrado.empty else 0, 2):
         colunas = st.columns(2)
         for coluna, var in zip(colunas, variaveis[inicio : inicio + 2]):
             contagem = calcular_histograma(df_filtrado, var, separar_por_classe)
